@@ -11,6 +11,8 @@
 #include "progress/Progress.h"
 #include "utils/logoutput.h"
 
+#include "teton/teton.h"
+
 namespace cura
 {
 
@@ -105,7 +107,12 @@ void Scene::processMeshGroup(MeshGroup& mesh_group)
         {
             return;
         }
-        
+
+        logWarning("writeSliceData\n");
+        //teton::writeSliceData(storage);
+        teton::sliceMeshStorageToTetonMesh(storage.meshes.at(0));
+        logWarning("writeSliceData done\n");
+
         Progress::messageProgressStage(Progress::Stage::EXPORT, &fff_processor->time_keeper);
         fff_processor->gcode_writer.writeGCode(storage, fff_processor->time_keeper);
     }

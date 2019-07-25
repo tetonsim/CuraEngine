@@ -213,6 +213,8 @@ set(engine_SRCS # Except main.cpp.
     src/utils/ProximityPointLink.cpp
     src/utils/SVG.cpp
     src/utils/socket.cpp
+
+    src/teton/teton.cpp
 )
 
 # List of tests. For each test there must be a file tests/${NAME}.cpp.
@@ -256,7 +258,7 @@ set(engine_TEST_ARCUS_HELPERS
 
 # Generating ProtoBuf protocol
 if (ENABLE_ARCUS)
-    protobuf_generate_cpp(engine_PB_SRCS engine_PB_HEADERS Cura.proto)
+    protobuf_generate_cpp(engine_PB_SRCS engine_PB_HEADERS Cura.proto Teton.proto)
 endif ()
 
 # Compiling CuraEngine itself.

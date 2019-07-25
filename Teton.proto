@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package teton.proto;
+
+message Mesh {
+    int32 id = 1;
+    string name = 2;
+    repeated Layer layers = 3;
+}
+
+message Layer {
+    int32 id = 1;
+    float height = 2; // Z position
+    float line_width = 3;
+    float line_thickness = 4;
+
+    repeated LayerPart parts = 5;
+}
+
+message LayerPart {
+    int32 id = 1;
+
+    Polygon exterior = 2;
+    //repeated 
+    repeated Wall walls = 3;
+    repeated Skin skins = 4;
+    repeated Infill infills = 5;
+}
+
+message Polygon {
+    bytes points = 1;
+}
+
+message Wall {
+    Polygon polygon = 1;
+}
+
+message Skin {
+    Polygon polygon = 1;
+    int32 skin_orientation = 2;
+}
+
+message Infill {
+    enum Pattern {
+        Grid = 0;
+        Triangle = 1;
+        Cubic = 2;
+    }
+
+    Polygon polygon = 1;
+    Pattern pattern = 2;
+    int32 line_spacing = 3;
+    int32 orientation = 4;
+}
+
