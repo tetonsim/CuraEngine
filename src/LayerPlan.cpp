@@ -82,6 +82,7 @@ LayerPlan::LayerPlan(const SliceDataStorage& storage, LayerIndex layer_nr, coord
 : storage(storage)
 , configs_storage(storage, layer_nr, layer_thickness)
 , z(z)
+, final_travel_z(z)
 , mode_skip_agressive_merge(false)
 , layer_nr(layer_nr)
 , is_initial_layer(layer_nr == 0 - static_cast<LayerIndex>(Raft::getTotalExtraLayers()))
@@ -1456,10 +1457,6 @@ void LayerPlan::writeGCode(GCodeExport& gcode)
             }
 
             const ExtruderTrain& extruder = Application::getInstance().current_slice->scene.extruders[extruder_nr];
-            if (extruder.settings.get<Velocity>("max_feedrate_z_override") > 0)
-            {
-                gcode.writeMaxZFeedrate(extruder.settings.get<Velocity>("max_feedrate_z_override"));
-            }
 
             { // require printing temperature to be met
                 constexpr bool wait = true;
@@ -1507,10 +1504,6 @@ void LayerPlan::writeGCode(GCodeExport& gcode)
             });
 
         const ExtruderTrain& extruder = Application::getInstance().current_slice->scene.extruders[extruder_nr];
-        if (extruder.settings.get<Velocity>("max_feedrate_z_override") > 0)
-        {
-            gcode.writeMaxZFeedrate(extruder.settings.get<Velocity>("max_feedrate_z_override"));
-        }
 
         bool update_extrusion_offset = true;
 
@@ -1596,6 +1589,16 @@ void LayerPlan::writeGCode(GCodeExport& gcode)
             }
             if (path.config->isTravelPath())
             { // early comp for travel paths, which are handled more simply
+                if (!path.perform_z_hop && final_travel_z != z && extruder_plan_idx == (extruder_plans.size() - 1) && path_idx == (paths.size() - 1))
+                {
+                    // Before the final travel, move up to the next layer height, on the current spot, with a sensible speed.
+                    Point3 current_position = gcode.getPosition();
+                    current_position.z = final_travel_z;
+                    gcode.writeTravel(current_position, extruder.settings.get<Velocity>("speed_z_hop"));
+
+                    // Prevent the final travel(s) from resetting to the 'previous' layer height.
+                    gcode.setZ(final_travel_z);
+                }
                 for(unsigned int point_idx = 0; point_idx < path.points.size(); point_idx++)
                 {
                     gcode.writeTravel(path.points[point_idx], speed);
