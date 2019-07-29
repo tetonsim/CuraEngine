@@ -26,10 +26,11 @@ message LayerPart {
 message PrintArea {
     enum Type {
         UnknownType = 0;
-        Wall = 1;
-        Skin = 2;
-        Infill = 3;
-        Hole = 4;
+        Exterior = 1;
+        Wall = 2;
+        Skin = 3;
+        Infill = 4;
+        Hole = 5;
     }
     
     enum InfillPattern {

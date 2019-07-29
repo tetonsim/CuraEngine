@@ -108,10 +108,9 @@ void Scene::processMeshGroup(MeshGroup& mesh_group)
             return;
         }
 
-        logWarning("writeSliceData\n");
-        //teton::writeSliceData(storage);
-        teton::sliceMeshStorageToTetonMesh(storage.meshes.at(0));
-        logWarning("writeSliceData done\n");
+        for (const SliceMeshStorage& meshStorage : storage.meshes) {
+            teton::sliceMeshStorageToTetonMesh(meshStorage);
+        }
 
         Progress::messageProgressStage(Progress::Stage::EXPORT, &fff_processor->time_keeper);
         fff_processor->gcode_writer.writeGCode(storage, fff_processor->time_keeper);

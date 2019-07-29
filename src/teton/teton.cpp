@@ -44,7 +44,7 @@ void curaSliceLayerPartToProto(proto::LayerPart* part, const cura::SliceLayerPar
     
     area->set_id(poly_id++); // print area bounded by exterior polygon always gets id of 1
     area->set_inside(0); // exterior polygon is not inside of any other area
-    area->set_type(proto::PrintArea::Wall);
+    area->set_type(proto::PrintArea::Exterior);
 
     // Holes
     for (size_t i = 1; i < curaPart.outline.size(); i++) {
@@ -70,6 +70,8 @@ void curaSliceLayerPartToProto(proto::LayerPart* part, const cura::SliceLayerPar
             curaPolygonToPrintArea(inset_area, curaInset);
 
             inset_area->set_id(poly_id++);
+            inset_area->set_inside(0); // TODO
+            inset_area->set_type(proto::PrintArea::Wall);
         }
     }
 
@@ -94,6 +96,18 @@ void curaSliceLayerPartToProto(proto::LayerPart* part, const cura::SliceLayerPar
             skinArea->set_inside(0); // TODO
             skinArea->set_type(proto::PrintArea::Skin);
         }
+    }
+
+    // Infills
+    const cura::Polygons& infillAreas = curaPart.getOwnInfillArea();
+    for (size_t i = 0; i < infillAreas.size(); i++) {
+        proto::PrintArea* infillArea = part->add_areas();
+
+        curaPolygonToPrintArea(infillArea, infillAreas[i]);
+
+        infillArea->set_id(poly_id++);
+        infillArea->set_inside(0); // TODO
+        infillArea->set_type(proto::PrintArea::Infill);
     }
 }
 
@@ -138,12 +152,19 @@ proto::Mesh sliceMeshStorageToTetonMesh(const cura::SliceMeshStorage& meshStorag
             curaSliceLayerPartToProto(part, p);
         }
     }
-    
-    std::ofstream teton_mesh_out("teton.json");
-    
-    //teton_mesh.SerializeToOstream(&teton_mesh_out);
-    //teton_mesh_out.close();
 
+    std::string out_name(meshStorage.mesh_name);
+
+    size_t iext = out_name.rfind(".stl");
+
+    if (iext == std::string::npos) {
+        out_name += ".teton";
+    } else {
+        out_name.replace(iext, 4, ".teton");
+    }
+    
+    std::ofstream teton_mesh_out(out_name);
+    
     std::string mesh_string;
 
     google::protobuf::util::JsonPrintOptions jsonOpts;
@@ -151,7 +172,6 @@ proto::Mesh sliceMeshStorageToTetonMesh(const cura::SliceMeshStorage& meshStorag
     jsonOpts.add_whitespace = true;
     jsonOpts.always_print_primitive_fields = true;
 
-    //google::protobuf::TextFormat::PrintToString(mesh, &mesh_string);
     google::protobuf::util::MessageToJsonString(mesh, &mesh_string, jsonOpts);
 
     teton_mesh_out << mesh_string;
