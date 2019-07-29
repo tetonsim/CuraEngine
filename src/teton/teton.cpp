@@ -1,6 +1,7 @@
 #include "teton.h"
 #include <fstream>
 #include <google/protobuf/text_format.h>
+#include <google/protobuf/util/json_util.h>
 
 #include "../utils/logoutput.h"
 
@@ -9,51 +10,7 @@ namespace teton {
 Exception::Exception(std::string message) : message_(message) {
 }
 
-/*
-void addSliceLayerPartToPolygons(cura::proto::Layer& layer, const cura::SliceLayerPart& sliceLayerPart) {
-    cura::proto::Polygon* polygon = layer.add_polygons();
-
-    cura::log("---------- # infill_area: %i", sliceLayerPart.infill_area_per_combine_per_density.size());
-}
-
-void sliceLayerToProtoLayer(cura::proto::MeshLayers& layers, const cura::SliceLayer& sliceLayer) {
-    cura::proto::Layer* layer = layers.add_layers();
-
-    layer->set_height(sliceLayer.printZ);
-    layer->set_thickness(sliceLayer.thickness);
-
-    for (const auto& slp : sliceLayer.parts) {
-        addSliceLayerPartToPolygons(*layer, slp);
-    }
-}
-
-cura::proto::MeshLayers sliceMeshToProtoLayers(const cura::SliceMeshStorage& meshStorage) {
-    cura::proto::MeshLayers layers;
-
-    for (const auto& l : meshStorage.layers) {
-        sliceLayerToProtoLayer(layers, l);
-    }
-
-    return layers;
-}
-
-void writeSliceData(const cura::SliceDataStorage& storage) {
-    if (storage.meshes.size() != 1) {
-        throw Exception("Teton/Chop does not support more than one mesh at a time");
-    }
-
-    auto layers = sliceMeshToProtoLayers(storage.meshes.at(0));
-
-    // serialize to file? do we need a new Protobuf type with repeated Layer?
-    std::ofstream layerFile("meshLayers.proto");
-    layers.SerializeToOstream(&layerFile);
-    layerFile.close();
-}
-*/
-
-proto::Polygon* curaPolygonToProto(cura::ConstPolygonRef polygon) {
-    proto::Polygon* p = new proto::Polygon();
-
+void curaPolygonToPrintArea(proto::PrintArea* area, cura::ConstPolygonRef curaPoly) {
     // The points in the proto::Polygon are defined as a single sequence
     // of coord_ts where the values are ordered as such:
     //
@@ -65,16 +22,79 @@ proto::Polygon* curaPolygonToProto(cura::ConstPolygonRef polygon) {
 
     std::vector<cura::coord_t> points;
 
-    points.reserve( polygon.size() * 2 );
+    points.reserve( curaPoly.size() * 2 );
 
-    for (const auto& p : polygon) {
+    for (const auto& p : curaPoly) {
         points.push_back(p.X);
         points.push_back(p.Y);
+        //points.push_back(p.X / 1000);
+        //points.push_back(p.Y / 1000);
     }
 
-    p->set_points(points.data(), sizeof(cura::coord_t) * points.size());
+    //area->set_points(points.data(), sizeof(cura::coord_t) * points.size());
+    *(area->mutable_points()) = { points.begin(), points.end() };
+}
 
-    return p;
+void curaSliceLayerPartToProto(proto::LayerPart* part, const cura::SliceLayerPart& curaPart) {
+    proto::PrintArea* area = part->add_areas();
+    
+    curaPolygonToPrintArea(area, curaPart.outline.outerPolygon());
+    
+    size_t poly_id = 1;
+    
+    area->set_id(poly_id++); // print area bounded by exterior polygon always gets id of 1
+    area->set_inside(0); // exterior polygon is not inside of any other area
+    area->set_type(proto::PrintArea::Wall);
+
+    // Holes
+    for (size_t i = 1; i < curaPart.outline.size(); i++) {
+        proto::PrintArea* hole = part->add_areas();
+
+        curaPolygonToPrintArea(hole, curaPart.outline[i]);
+
+        hole->set_id(poly_id++);
+        hole->set_inside(0); // TODO
+        hole->set_type(proto::PrintArea::Hole);
+    }
+
+    // Walls
+    for (size_t i = 0; i < curaPart.insets.size(); i++) {
+        const cura::Polygons& insetPolys = curaPart.insets[i];
+        //const cura::Polygons& insetPolys = curaPart.insets.back();
+        
+        for (size_t j = 0; j < insetPolys.size(); j++) {
+            const cura::ConstPolygonRef curaInset = insetPolys[j];
+
+            proto::PrintArea* inset_area = part->add_areas();
+
+            curaPolygonToPrintArea(inset_area, curaInset);
+
+            inset_area->set_id(poly_id++);
+        }
+    }
+
+    // Skins
+    for (const cura::SkinPart& skinPart : curaPart.skin_parts) {
+        const cura::PolygonsPart& ppart = skinPart.outline;
+
+        proto::PrintArea* skinOuterArea = part->add_areas();
+
+        curaPolygonToPrintArea(skinOuterArea, ppart[0]);
+
+        skinOuterArea->set_id(poly_id++);
+        skinOuterArea->set_inside(0); // TODO
+        skinOuterArea->set_type(proto::PrintArea::Skin);
+
+        for (size_t i = 1; i < ppart.size(); i++) {
+            proto::PrintArea* skinArea = part->add_areas();
+
+            curaPolygonToPrintArea(skinArea, ppart[i]);
+
+            skinArea->set_id(poly_id++);
+            skinArea->set_inside(0); // TODO
+            skinArea->set_type(proto::PrintArea::Skin);
+        }
+    }
 }
 
 proto::Mesh sliceMeshStorageToTetonMesh(const cura::SliceMeshStorage& meshStorage) {
@@ -103,28 +123,36 @@ proto::Mesh sliceMeshStorageToTetonMesh(const cura::SliceMeshStorage& meshStorag
     if (infill_line_width != line_width) {
     }
 
+    size_t layer_id = 1;
+
     for (const cura::SliceLayer& l : meshStorage.layers) {
         proto::Layer* layer = mesh.add_layers();
 
+        layer->set_id(layer_id++);
         layer->set_height(l.printZ);
         layer->set_line_thickness(l.thickness);
         layer->set_line_width(line_width);
 
         for (const cura::SliceLayerPart& p : l.parts) {
             proto::LayerPart* part = layer->add_parts();
-
-            part->set_allocated_exterior( curaPolygonToProto(p.outline.outerPolygon()) );
+            curaSliceLayerPartToProto(part, p);
         }
     }
     
-    std::ofstream teton_mesh_out("teton.mesh");
+    std::ofstream teton_mesh_out("teton.json");
     
     //teton_mesh.SerializeToOstream(&teton_mesh_out);
     //teton_mesh_out.close();
 
     std::string mesh_string;
 
-    google::protobuf::TextFormat::PrintToString(mesh, &mesh_string);
+    google::protobuf::util::JsonPrintOptions jsonOpts;
+
+    jsonOpts.add_whitespace = true;
+    jsonOpts.always_print_primitive_fields = true;
+
+    //google::protobuf::TextFormat::PrintToString(mesh, &mesh_string);
+    google::protobuf::util::MessageToJsonString(mesh, &mesh_string, jsonOpts);
 
     teton_mesh_out << mesh_string;
     teton_mesh_out.close();

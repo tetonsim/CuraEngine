@@ -20,36 +20,34 @@ message Layer {
 message LayerPart {
     int32 id = 1;
 
-    Polygon exterior = 2;
-    //repeated 
-    repeated Wall walls = 3;
-    repeated Skin skins = 4;
-    repeated Infill infills = 5;
+    repeated PrintArea areas = 3;
 }
 
-message Polygon {
-    bytes points = 1;
-}
-
-message Wall {
-    Polygon polygon = 1;
-}
-
-message Skin {
-    Polygon polygon = 1;
-    int32 skin_orientation = 2;
-}
-
-message Infill {
-    enum Pattern {
-        Grid = 0;
-        Triangle = 1;
-        Cubic = 2;
+message PrintArea {
+    enum Type {
+        UnknownType = 0;
+        Wall = 1;
+        Skin = 2;
+        Infill = 3;
+        Hole = 4;
+    }
+    
+    enum InfillPattern {
+        UnknownPattern = 0;
+        Grid = 1;
+        Triangle = 2;
+        Cubic = 3;
     }
 
-    Polygon polygon = 1;
-    Pattern pattern = 2;
-    int32 line_spacing = 3;
-    int32 orientation = 4;
+    int32 id = 1;
+    int32 inside = 2; // id of PrintArea this PrintArea is inside of
+    //bytes points = 3; // polygon
+    repeated int32 points = 3; // polygon
+
+    Type type = 4;
+
+    float orientation = 5; // skin or infill orientation
+    float infill_line_spacing = 6;
+    InfillPattern infill_pattern = 7;
 }
 
