@@ -147,8 +147,13 @@ proto::Mesh sliceMeshStorageToTetonMesh(const cura::SliceMeshStorage& meshStorag
         layer->set_line_thickness(l.thickness);
         layer->set_line_width(line_width);
 
+        size_t part_id = 1;
+
         for (const cura::SliceLayerPart& p : l.parts) {
             proto::LayerPart* part = layer->add_parts();
+
+            part->set_id(part_id++);
+
             curaSliceLayerPartToProto(part, p);
         }
     }
