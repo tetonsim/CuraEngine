@@ -31,6 +31,7 @@ message PrintArea {
         Skin = 3;
         Infill = 4;
         Hole = 5;
+        Gap = 6;
     }
     
     enum InfillPattern {

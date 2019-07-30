@@ -37,11 +37,11 @@ void curaPolygonToPrintArea(proto::PrintArea* area, cura::ConstPolygonRef curaPo
 
 void curaSliceLayerPartToProto(proto::LayerPart* part, const cura::SliceLayerPart& curaPart) {
     proto::PrintArea* area = part->add_areas();
-    
+
     curaPolygonToPrintArea(area, curaPart.outline.outerPolygon());
-    
+
     size_t poly_id = 1;
-    
+
     area->set_id(poly_id++); // print area bounded by exterior polygon always gets id of 1
     area->set_inside(0); // exterior polygon is not inside of any other area
     area->set_type(proto::PrintArea::Exterior);
@@ -61,7 +61,7 @@ void curaSliceLayerPartToProto(proto::LayerPart* part, const cura::SliceLayerPar
     for (size_t i = 0; i < curaPart.insets.size(); i++) {
         const cura::Polygons& insetPolys = curaPart.insets[i];
         //const cura::Polygons& insetPolys = curaPart.insets.back();
-        
+
         for (size_t j = 0; j < insetPolys.size(); j++) {
             const cura::ConstPolygonRef curaInset = insetPolys[j];
 
@@ -109,6 +109,19 @@ void curaSliceLayerPartToProto(proto::LayerPart* part, const cura::SliceLayerPar
         infillArea->set_inside(0); // TODO
         infillArea->set_type(proto::PrintArea::Infill);
     }
+
+    // Gaps
+    for (const cura::Polygons& gaps : { curaPart.outline_gaps, curaPart.perimeter_gaps }) {
+        for (size_t i = 0; i < gaps.size(); i++) {
+            proto::PrintArea* gapArea = part->add_areas();
+
+            curaPolygonToPrintArea(gapArea, gaps[i]);
+
+            gapArea->set_id(poly_id++);
+            gapArea->set_inside(0); // TODO
+            gapArea->set_type(proto::PrintArea::Gap);
+        }
+    }
 }
 
 proto::Mesh sliceMeshStorageToTetonMesh(const cura::SliceMeshStorage& meshStorage) {
@@ -140,6 +153,11 @@ proto::Mesh sliceMeshStorageToTetonMesh(const cura::SliceMeshStorage& meshStorag
     size_t layer_id = 1;
 
     for (const cura::SliceLayer& l : meshStorage.layers) {
+
+        if ((cura::LayerIndex)(layer_id - 1) > meshStorage.layer_nr_max_filled_layer) {
+            break;
+        }
+
         proto::Layer* layer = mesh.add_layers();
 
         layer->set_id(layer_id++);
@@ -167,9 +185,9 @@ proto::Mesh sliceMeshStorageToTetonMesh(const cura::SliceMeshStorage& meshStorag
     } else {
         out_name.replace(iext, 4, ".teton");
     }
-    
+
     std::ofstream teton_mesh_out(out_name);
-    
+
     std::string mesh_string;
 
     google::protobuf::util::JsonPrintOptions jsonOpts;
