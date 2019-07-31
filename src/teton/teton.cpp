@@ -124,10 +124,8 @@ void curaSliceLayerPartToProto(proto::LayerPart* part, const cura::SliceLayerPar
     }
 }
 
-proto::Mesh sliceMeshStorageToTetonMesh(const cura::SliceMeshStorage& meshStorage) {
-    proto::Mesh mesh;
-
-    mesh.set_name(meshStorage.mesh_name);
+void sliceMeshStorageToTetonMesh(proto::Mesh* mesh, const cura::SliceMeshStorage& meshStorage) {
+    mesh->set_name(meshStorage.mesh_name);
 
     cura::coord_t wall_line_width_0 = meshStorage.settings.get<cura::coord_t>("wall_line_width_0");
     cura::coord_t wall_line_width_x = meshStorage.settings.get<cura::coord_t>("wall_line_width_x");
@@ -158,7 +156,7 @@ proto::Mesh sliceMeshStorageToTetonMesh(const cura::SliceMeshStorage& meshStorag
             break;
         }
 
-        proto::Layer* layer = mesh.add_layers();
+        proto::Layer* layer = mesh->add_layers();
 
         layer->set_id(layer_id++);
         layer->set_height(l.printZ);
@@ -175,32 +173,67 @@ proto::Mesh sliceMeshStorageToTetonMesh(const cura::SliceMeshStorage& meshStorag
             curaSliceLayerPartToProto(part, p);
         }
     }
+}
 
-    std::string out_name(meshStorage.mesh_name);
+proto::Meshes sliceDataStorageToTetonMeshes(const cura::SliceDataStorage& storage) {
+    proto::Meshes meshes;
+
+    size_t mesh_id = 1;
+
+    for (const cura::SliceMeshStorage& meshStorage : storage.meshes) {
+        proto::Mesh* mesh = meshes.add_meshes();
+
+        mesh->set_id(mesh_id++);
+
+        teton::sliceMeshStorageToTetonMesh(mesh, meshStorage);
+    }
+
+    std::string out_name("teton-mesh.stl");
+
+    // If there is only one non-special mesh then set the out_name to that STL
+    const cura::SliceMeshStorage* nonSpecialMesh = nullptr;
+    for (const cura::SliceMeshStorage& meshStorage : storage.meshes) {
+        bool infill_mesh = meshStorage.settings.get<bool>("infill_mesh");
+        bool anti_overhang_mesh = meshStorage.settings.get<bool>("anti_overhang_mesh");
+        bool cutting_mesh = meshStorage.settings.get<bool>("cutting_mesh");
+        bool support_mesh = meshStorage.settings.get<bool>("support_mesh");
+
+        if (!infill_mesh && !anti_overhang_mesh && !cutting_mesh && !support_mesh) {
+            if (nonSpecialMesh) { // already set so there are multiple non special meshes
+                nonSpecialMesh = nullptr;
+                break;
+            }
+            nonSpecialMesh = &meshStorage;
+        }
+    }
+
+    if (nonSpecialMesh) {
+        out_name = nonSpecialMesh->mesh_name;
+    }
 
     size_t iext = out_name.rfind(".stl");
 
     if (iext == std::string::npos) {
-        out_name += ".teton";
+        out_name += ".json";
     } else {
-        out_name.replace(iext, 4, ".teton");
+        out_name.replace(iext, 4, ".json");
     }
 
     std::ofstream teton_mesh_out(out_name);
 
-    std::string mesh_string;
+    std::string meshes_string;
 
     google::protobuf::util::JsonPrintOptions jsonOpts;
 
     jsonOpts.add_whitespace = true;
     jsonOpts.always_print_primitive_fields = true;
 
-    google::protobuf::util::MessageToJsonString(mesh, &mesh_string, jsonOpts);
+    google::protobuf::util::MessageToJsonString(meshes, &meshes_string, jsonOpts);
 
-    teton_mesh_out << mesh_string;
+    teton_mesh_out << meshes_string;
     teton_mesh_out.close();
 
-    return mesh;
+    return meshes;
 }
 
 } // namespace teton

@@ -14,7 +14,7 @@ public:
     std::string message_;
 };
 
-proto::Mesh sliceMeshStorageToTetonMesh(const cura::SliceMeshStorage& meshStorage);
+proto::Meshes sliceDataStorageToTetonMeshes(const cura::SliceDataStorage& storage);
 
 } // namespace teton
 
