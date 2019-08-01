@@ -1,4 +1,5 @@
 #include "teton.h"
+#include <cstdlib>
 #include <fstream>
 #include <google/protobuf/text_format.h>
 #include <google/protobuf/util/json_util.h>
@@ -8,6 +9,65 @@
 namespace teton {
 
 Exception::Exception(std::string message) : message_(message) {
+}
+
+std::string outputDirectory() {
+    const char* cura_polys_dir = std::getenv("CURA_POLY_DIR");
+
+    if (cura_polys_dir) {
+        return std::string(cura_polys_dir);
+    }
+
+    for (const char* env_name : { "TMPDIR", "TMP", "TEMP", "TEMPDIR" }) {
+        const char* tmpdir = std::getenv(env_name);
+
+        if (tmpdir) {
+            return std::string(tmpdir);
+        }
+    }
+
+    return std::string("/tmp");
+}
+
+std::string outputFile(const cura::SliceDataStorage& storage) {
+    std::string out_name("teton-mesh.stl");
+
+    // If there is only one non-special mesh then set the out_name to that STL
+    const cura::SliceMeshStorage* nonSpecialMesh = nullptr;
+    for (const cura::SliceMeshStorage& meshStorage : storage.meshes) {
+        bool infill_mesh = meshStorage.settings.get<bool>("infill_mesh");
+        bool anti_overhang_mesh = meshStorage.settings.get<bool>("anti_overhang_mesh");
+        bool cutting_mesh = meshStorage.settings.get<bool>("cutting_mesh");
+        bool support_mesh = meshStorage.settings.get<bool>("support_mesh");
+
+        if (!infill_mesh && !anti_overhang_mesh && !cutting_mesh && !support_mesh) {
+            if (nonSpecialMesh) { // already set so there are multiple non special meshes
+                nonSpecialMesh = nullptr;
+                break;
+            }
+            nonSpecialMesh = &meshStorage;
+        }
+    }
+
+    if (nonSpecialMesh) {
+        out_name = nonSpecialMesh->mesh_name;
+    }
+
+    size_t iext = out_name.rfind(".stl");
+
+    if (iext == std::string::npos) {
+        out_name += ".json";
+    } else {
+        out_name.replace(iext, 4, ".json");
+    }
+
+    std::string out_dir = outputDirectory();
+
+    if (out_dir.size() > 0) {
+        out_name = out_dir + "/" + out_name;
+    }
+
+    return out_name;
 }
 
 void curaPolygonToPrintArea(proto::PrintArea* area, cura::ConstPolygonRef curaPoly) {
@@ -188,36 +248,7 @@ proto::Meshes sliceDataStorageToTetonMeshes(const cura::SliceDataStorage& storag
         teton::sliceMeshStorageToTetonMesh(mesh, meshStorage);
     }
 
-    std::string out_name("teton-mesh.stl");
-
-    // If there is only one non-special mesh then set the out_name to that STL
-    const cura::SliceMeshStorage* nonSpecialMesh = nullptr;
-    for (const cura::SliceMeshStorage& meshStorage : storage.meshes) {
-        bool infill_mesh = meshStorage.settings.get<bool>("infill_mesh");
-        bool anti_overhang_mesh = meshStorage.settings.get<bool>("anti_overhang_mesh");
-        bool cutting_mesh = meshStorage.settings.get<bool>("cutting_mesh");
-        bool support_mesh = meshStorage.settings.get<bool>("support_mesh");
-
-        if (!infill_mesh && !anti_overhang_mesh && !cutting_mesh && !support_mesh) {
-            if (nonSpecialMesh) { // already set so there are multiple non special meshes
-                nonSpecialMesh = nullptr;
-                break;
-            }
-            nonSpecialMesh = &meshStorage;
-        }
-    }
-
-    if (nonSpecialMesh) {
-        out_name = nonSpecialMesh->mesh_name;
-    }
-
-    size_t iext = out_name.rfind(".stl");
-
-    if (iext == std::string::npos) {
-        out_name += ".json";
-    } else {
-        out_name.replace(iext, 4, ".json");
-    }
+    std::string out_name = outputFile(storage);
 
     std::ofstream teton_mesh_out(out_name);
 
