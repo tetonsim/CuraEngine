@@ -24,11 +24,12 @@ message Mesh {
     int32 id = 1;
     string name = 2;
     Type type = 3;
-    
+
     float infill_line_spacing = 4;
     InfillPattern infill_pattern = 5;
+    repeated int32 infill_angles = 6;
 
-    repeated Layer layers = 6;
+    repeated Layer layers = 7;
 }
 
 message Layer {

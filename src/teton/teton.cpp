@@ -214,11 +214,11 @@ void sliceMeshStorageToTetonMesh(proto::Mesh* mesh, const cura::SliceMeshStorage
         mesh->set_type(proto::Mesh::Normal);
     }
 
-    // Infill line spacing and pattern
+    // Infill line spacing
     mesh->set_infill_line_spacing(meshStorage.settings.get<cura::coord_t>("infill_line_distance"));
 
+    // Infill pattern
     cura::EFillMethod infill_pattern = meshStorage.settings.get<cura::EFillMethod>("infill_pattern");
-
     switch (infill_pattern) {
         case cura::EFillMethod::GRID:
             mesh->set_infill_pattern(proto::Mesh::Grid);
@@ -231,6 +231,13 @@ void sliceMeshStorageToTetonMesh(proto::Mesh* mesh, const cura::SliceMeshStorage
             break;
         default:
             mesh->set_infill_pattern(proto::Mesh::UnknownPattern);
+    }
+
+    // Infill line angles
+    std::vector<cura::AngleDegrees> infill_angles = meshStorage.settings.get< std::vector<cura::AngleDegrees> >("infill_angles");
+
+    for (auto angle : infill_angles) {
+        mesh->mutable_infill_angles()->Add(angle);
     }
 
     // Mesh layers
