@@ -5,6 +5,7 @@
 #include <google/protobuf/util/json_util.h>
 
 #include "../utils/logoutput.h"
+#include "../settings/EnumSettings.h"
 
 namespace teton {
 
@@ -70,7 +71,7 @@ std::string outputFile(const cura::SliceDataStorage& storage) {
     return out_name;
 }
 
-void curaPolygonToPrintArea(proto::PrintArea* area, cura::ConstPolygonRef curaPoly) {
+void curaPolygonToPolygon(proto::Polygon* poly, cura::ConstPolygonRef curaPoly) {
     // The points in the proto::Polygon are defined as a single sequence
     // of coord_ts where the values are ordered as such:
     //
@@ -87,51 +88,45 @@ void curaPolygonToPrintArea(proto::PrintArea* area, cura::ConstPolygonRef curaPo
     for (const auto& p : curaPoly) {
         points.push_back(p.X);
         points.push_back(p.Y);
-        //points.push_back(p.X / 1000);
-        //points.push_back(p.Y / 1000);
     }
 
-    //area->set_points(points.data(), sizeof(cura::coord_t) * points.size());
-    *(area->mutable_points()) = { points.begin(), points.end() };
+    *(poly->mutable_points()) = { points.begin(), points.end() };
 }
 
 void curaSliceLayerPartToProto(proto::LayerPart* part, const cura::SliceLayerPart& curaPart) {
-    proto::PrintArea* area = part->add_areas();
+    proto::Polygon* poly = part->add_polygons();
 
-    curaPolygonToPrintArea(area, curaPart.outline.outerPolygon());
+    curaPolygonToPolygon(poly, curaPart.outline.outerPolygon());
 
     size_t poly_id = 1;
 
-    area->set_id(poly_id++); // print area bounded by exterior polygon always gets id of 1
-    area->set_inside(0); // exterior polygon is not inside of any other area
-    area->set_type(proto::PrintArea::Exterior);
+    poly->set_id(poly_id++); // print poly bounded by exterior polygon always gets id of 1
+    poly->set_type(proto::Polygon::Exterior);
 
     // Holes
     for (size_t i = 1; i < curaPart.outline.size(); i++) {
-        proto::PrintArea* hole = part->add_areas();
+        proto::Polygon* hole = part->add_polygons();
 
-        curaPolygonToPrintArea(hole, curaPart.outline[i]);
+        curaPolygonToPolygon(hole, curaPart.outline[i]);
 
         hole->set_id(poly_id++);
-        hole->set_inside(0); // TODO
-        hole->set_type(proto::PrintArea::Hole);
+        hole->set_type(proto::Polygon::Hole);
     }
 
     // Walls
     for (size_t i = 0; i < curaPart.insets.size(); i++) {
-        const cura::Polygons& insetPolys = curaPart.insets[i];
-        //const cura::Polygons& insetPolys = curaPart.insets.back();
+        const cura::Polygons& wallPolys = curaPart.insets[i];
+        //const cura::Polygons& wallPolys = curaPart.insets.back();
 
-        for (size_t j = 0; j < insetPolys.size(); j++) {
-            const cura::ConstPolygonRef curaInset = insetPolys[j];
+        for (size_t j = 0; j < wallPolys.size(); j++) {
+            const cura::ConstPolygonRef curaInset = wallPolys[j];
 
-            proto::PrintArea* inset_area = part->add_areas();
+            proto::Polygon* wallPoly = part->add_polygons();
 
-            curaPolygonToPrintArea(inset_area, curaInset);
+            curaPolygonToPolygon(wallPoly, curaInset);
 
-            inset_area->set_id(poly_id++);
-            inset_area->set_inside(0); // TODO
-            inset_area->set_type(proto::PrintArea::Wall);
+            wallPoly->set_id(poly_id++);
+            wallPoly->set_type(proto::Polygon::Wall);
         }
     }
 
@@ -139,47 +134,43 @@ void curaSliceLayerPartToProto(proto::LayerPart* part, const cura::SliceLayerPar
     for (const cura::SkinPart& skinPart : curaPart.skin_parts) {
         const cura::PolygonsPart& ppart = skinPart.outline;
 
-        proto::PrintArea* skinOuterArea = part->add_areas();
+        proto::Polygon* skinOuterPoly = part->add_polygons();
 
-        curaPolygonToPrintArea(skinOuterArea, ppart[0]);
+        curaPolygonToPolygon(skinOuterPoly, ppart[0]);
 
-        skinOuterArea->set_id(poly_id++);
-        skinOuterArea->set_inside(0); // TODO
-        skinOuterArea->set_type(proto::PrintArea::Skin);
+        skinOuterPoly->set_id(poly_id++);
+        skinOuterPoly->set_type(proto::Polygon::Skin);
 
         for (size_t i = 1; i < ppart.size(); i++) {
-            proto::PrintArea* skinArea = part->add_areas();
+            proto::Polygon* skinPoly = part->add_polygons();
 
-            curaPolygonToPrintArea(skinArea, ppart[i]);
+            curaPolygonToPolygon(skinPoly, ppart[i]);
 
-            skinArea->set_id(poly_id++);
-            skinArea->set_inside(0); // TODO
-            skinArea->set_type(proto::PrintArea::Skin);
+            skinPoly->set_id(poly_id++);
+            skinPoly->set_type(proto::Polygon::Skin);
         }
     }
 
     // Infills
-    const cura::Polygons& infillAreas = curaPart.getOwnInfillArea();
-    for (size_t i = 0; i < infillAreas.size(); i++) {
-        proto::PrintArea* infillArea = part->add_areas();
+    const cura::Polygons& infillPolys = curaPart.getOwnInfillArea();
+    for (size_t i = 0; i < infillPolys.size(); i++) {
+        proto::Polygon* infillPoly = part->add_polygons();
 
-        curaPolygonToPrintArea(infillArea, infillAreas[i]);
+        curaPolygonToPolygon(infillPoly, infillPolys[i]);
 
-        infillArea->set_id(poly_id++);
-        infillArea->set_inside(0); // TODO
-        infillArea->set_type(proto::PrintArea::Infill);
+        infillPoly->set_id(poly_id++);
+        infillPoly->set_type(proto::Polygon::Infill);
     }
 
     // Gaps
     for (const cura::Polygons& gaps : { curaPart.outline_gaps, curaPart.perimeter_gaps }) {
         for (size_t i = 0; i < gaps.size(); i++) {
-            proto::PrintArea* gapArea = part->add_areas();
+            proto::Polygon* gapPoly = part->add_polygons();
 
-            curaPolygonToPrintArea(gapArea, gaps[i]);
+            curaPolygonToPolygon(gapPoly, gaps[i]);
 
-            gapArea->set_id(poly_id++);
-            gapArea->set_inside(0); // TODO
-            gapArea->set_type(proto::PrintArea::Gap);
+            gapPoly->set_id(poly_id++);
+            gapPoly->set_type(proto::Polygon::Gap);
         }
     }
 }
@@ -208,6 +199,41 @@ void sliceMeshStorageToTetonMesh(proto::Mesh* mesh, const cura::SliceMeshStorage
     if (infill_line_width != line_width) {
     }
 
+    // Mesh type
+    bool infill_mesh = meshStorage.settings.get<bool>("infill_mesh");
+    bool anti_overhang_mesh = meshStorage.settings.get<bool>("anti_overhang_mesh");
+    bool cutting_mesh = meshStorage.settings.get<bool>("cutting_mesh");
+    bool support_mesh = meshStorage.settings.get<bool>("support_mesh");
+    if (infill_mesh) {
+        mesh->set_type(proto::Mesh::Infill);
+    } else if (cutting_mesh) {
+        mesh->set_type(proto::Mesh::Cutting);
+    } else if (anti_overhang_mesh || support_mesh /*|| ant others?*/) {
+        mesh->set_type(proto::Mesh::UnknownMesh);
+    } else {
+        mesh->set_type(proto::Mesh::Normal);
+    }
+
+    // Infill line spacing and pattern
+    mesh->set_infill_line_spacing(meshStorage.settings.get<cura::coord_t>("infill_line_distance"));
+
+    cura::EFillMethod infill_pattern = meshStorage.settings.get<cura::EFillMethod>("infill_pattern");
+
+    switch (infill_pattern) {
+        case cura::EFillMethod::GRID:
+            mesh->set_infill_pattern(proto::Mesh::Grid);
+            break;
+        case cura::EFillMethod::TRIANGLES:
+            mesh->set_infill_pattern(proto::Mesh::Triangle);
+            break;
+        case cura::EFillMethod::CUBIC:
+            mesh->set_infill_pattern(proto::Mesh::Cubic);
+            break;
+        default:
+            mesh->set_infill_pattern(proto::Mesh::UnknownPattern);
+    }
+
+    // Mesh layers
     size_t layer_id = 1;
 
     for (const cura::SliceLayer& l : meshStorage.layers) {
@@ -222,6 +248,8 @@ void sliceMeshStorageToTetonMesh(proto::Mesh* mesh, const cura::SliceMeshStorage
         layer->set_height(l.printZ);
         layer->set_line_thickness(l.thickness);
         layer->set_line_width(line_width);
+        // TODO skin orientation
+        layer->set_skin_orientation(0.0);
 
         size_t part_id = 1;
 

@@ -7,37 +7,13 @@ message Meshes {
 }
 
 message Mesh {
-    int32 id = 1;
-    string name = 2;
-    repeated Layer layers = 3;
-}
-
-message Layer {
-    int32 id = 1;
-    float height = 2; // Z position
-    float line_width = 3;
-    float line_thickness = 4;
-
-    repeated LayerPart parts = 5;
-}
-
-message LayerPart {
-    int32 id = 1;
-
-    repeated PrintArea areas = 3;
-}
-
-message PrintArea {
     enum Type {
-        UnknownType = 0;
-        Exterior = 1;
-        Wall = 2;
-        Skin = 3;
-        Infill = 4;
-        Hole = 5;
-        Gap = 6;
+        UnknownMesh = 0;
+        Normal = 1;
+        Infill = 2;
+        Cutting = 3;
     }
-    
+
     enum InfillPattern {
         UnknownPattern = 0;
         Grid = 1;
@@ -46,14 +22,45 @@ message PrintArea {
     }
 
     int32 id = 1;
-    int32 inside = 2; // id of PrintArea this PrintArea is inside of
-    //bytes points = 3; // polygon
-    repeated int32 points = 3; // polygon
+    string name = 2;
+    Type type = 3;
+    
+    float infill_line_spacing = 4;
+    InfillPattern infill_pattern = 5;
+
+    repeated Layer layers = 6;
+}
+
+message Layer {
+    int32 id = 1;
+    float height = 2; // Z position
+    float line_width = 3;
+    float line_thickness = 4;
+    float skin_orientation = 5;
+
+    repeated LayerPart parts = 6;
+}
+
+message LayerPart {
+    int32 id = 1;
+
+    repeated Polygon polygons = 3;
+}
+
+message Polygon {
+    enum Type {
+        UnknownPolygon = 0;
+        Exterior = 1;
+        Wall = 2;
+        Skin = 3;
+        Infill = 4;
+        Hole = 5;
+        Gap = 6;
+    }
+
+    int32 id = 1;
+    repeated int32 points = 2;
 
     Type type = 4;
-
-    float orientation = 5; // skin or infill orientation
-    float infill_line_spacing = 6;
-    InfillPattern infill_pattern = 7;
 }
 
