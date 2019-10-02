@@ -14,7 +14,8 @@ public:
     std::string message_;
 };
 
-proto::Meshes sliceDataStorageToTetonMeshes(const cura::SliceDataStorage& storage);
+void sliceDataStorageToTetonMeshes(const cura::SliceDataStorage& storage, std::shared_ptr<teton::proto::Meshes> meshes);
+void writeMeshesToJson(const proto::Meshes& meshes, std::string out_name);
 
 } // namespace teton
 

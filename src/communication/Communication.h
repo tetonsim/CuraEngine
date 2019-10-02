@@ -15,6 +15,7 @@ enum class PrintFeatureType : unsigned char;
 class Polygons;
 class ConstPolygonRef;
 class ExtruderTrain;
+class SliceDataStorage;
 
 /*
  * An abstract class to provide a common interface for all methods of
@@ -172,6 +173,8 @@ public:
      * slice.
      */
     virtual void sliceNext() = 0;
+
+    virtual void sendSliceDataStorage(const SliceDataStorage&) const { }
 };
 
 } //namespace cura
