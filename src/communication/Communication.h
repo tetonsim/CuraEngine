@@ -174,6 +174,8 @@ public:
      */
     virtual void sliceNext() = 0;
 
+    virtual void sendLogMessage(const std::string& msg, int level) const { }
+
     virtual void sendSliceDataStorage(const SliceDataStorage&) const { }
 };
 
