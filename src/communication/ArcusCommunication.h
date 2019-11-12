@@ -194,6 +194,8 @@ public:
      */
     void sliceNext() override;
 
+    void sendLogMessage(const std::string& msg, int level) const override;
+
     void sendSliceDataStorage(const SliceDataStorage&) const override;
 
 private:
