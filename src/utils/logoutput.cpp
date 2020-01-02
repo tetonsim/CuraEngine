@@ -46,7 +46,9 @@ void logError(const char* fmt, ...)
     }
     va_end(args);
 
-    Application::getInstance().communication->sendLogMessage(msg, 0);
+    if (Application::getInstance().communication) {
+        Application::getInstance().communication->sendLogMessage(msg, 0);
+    }
 }
 
 void logWarning(const char* fmt, ...)
@@ -64,7 +66,9 @@ void logWarning(const char* fmt, ...)
     }
     va_end(args);
 
-    Application::getInstance().communication->sendLogMessage(msg, 1);
+    if (Application::getInstance().communication) {
+        Application::getInstance().communication->sendLogMessage(msg, 1);
+    }
 }
 
 void logAlways(const char* fmt, ...)
