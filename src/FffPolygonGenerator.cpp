@@ -1061,6 +1061,14 @@ void FffPolygonGenerator::processPlatformAdhesion(SliceDataStorage& storage)
         }
         break;
     }
+
+    // Also apply maximum_[deviation|resolution] to skirt/brim.
+    const coord_t line_segment_resolution = train.settings.get<coord_t>("meshfix_maximum_resolution");
+    const coord_t line_segment_deviation = train.settings.get<coord_t>("meshfix_maximum_deviation");
+    for (Polygons& polygons : storage.skirt_brim)
+    {
+        polygons.simplify(line_segment_resolution, line_segment_deviation);
+    }
 }
 
 
@@ -1084,6 +1092,11 @@ void FffPolygonGenerator::processFuzzyWalls(SliceMeshStorage& mesh)
             Polygons& skin = (mesh.settings.get<ESurfaceMode>("magic_mesh_surface_mode") == ESurfaceMode::SURFACE)? part.outline : part.insets[0];
             for (PolygonRef poly : skin)
             {
+                if (mesh.settings.get<bool>("magic_fuzzy_skin_outside_only") && poly.area() < 0)
+                {
+                    results.add(poly);
+                    continue;
+                }
                 // generate points in between p0 and p1
                 PolygonRef result = results.newPoly();
 
