@@ -141,3 +141,13 @@ message GCodePrefix {
 
 message SlicingFinished {
 }
+
+message LogMessage {
+    enum Level {
+        Error = 0;
+        Warn = 1;
+    }
+    Level level = 1;
+    string msg = 2;
+}
+

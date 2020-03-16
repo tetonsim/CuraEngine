@@ -105,9 +105,11 @@ void Scene::processMeshGroup(MeshGroup& mesh_group)
         {
             return;
         }
-        
+
         Progress::messageProgressStage(Progress::Stage::EXPORT, &fff_processor->time_keeper);
         fff_processor->gcode_writer.writeGCode(storage, fff_processor->time_keeper);
+
+        Application::getInstance().communication->sendSliceDataStorage(storage);
     }
 
     Progress::messageProgress(Progress::Stage::FINISH, 1, 1); // 100% on this meshgroup
