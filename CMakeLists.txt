@@ -1,9 +1,9 @@
 #Copyright (c) 2019 Ultimaker B.V.
 #CuraEngine is released under the terms of the AGPLv3 or higher.
 
-project(CuraEngine)
-
 cmake_minimum_required(VERSION 3.6.0)
+
+project(CuraEngine)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -40,9 +40,9 @@ if(CMAKE_BUILD_TYPE)
 endif()
 
 if(CMAKE_BUILD_TYPE_UPPER MATCHES "DEBUG")
-    set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS_DEBUG_INIT})
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG_INIT}")
 else()
-    set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS_RELEASE_INIT})
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE_INIT}")
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
@@ -221,6 +221,7 @@ set(engine_SRCS # Except main.cpp.
 set(engine_TEST
     GCodeExportTest
     InfillTest
+    LayerPlanTest
     MergeInfillLinesTest
     TimeEstimateCalculatorTest
 )
@@ -371,4 +372,15 @@ endif()
 # Installing CuraEngine.
 include(GNUInstallDirs)
 install(TARGETS CuraEngine DESTINATION ${CMAKE_INSTALL_BINDIR})
+# For MinGW64 cross compiling on Debian, we create a ZIP package instead of a DEB
+# Because it's the Windows build system that should install the files.
+if (CMAKE_CROSSCOMPILING AND CMAKE_SYSTEM_NAME MATCHES "Windows")
+    message(STATUS "Include MinGW64 posix DLLs for installation.")
+    install(FILES
+            /usr/lib/gcc/x86_64-w64-mingw32/8.3-posix/libgcc_s_seh-1.dll
+            /usr/lib/gcc/x86_64-w64-mingw32/8.3-posix/libgomp-1.dll
+            /usr/lib/gcc/x86_64-w64-mingw32/8.3-posix/libstdc++-6.dll
+            DESTINATION bin
+            COMPONENT runtime)
+endif ()
 include(CPackConfig.cmake)

@@ -1,4 +1,4 @@
-//Copyright (c) 2018 Ultimaker B.V.
+//Copyright (c) 2020 Ultimaker B.V.
 //CuraEngine is released under the terms of the AGPLv3 or higher.
 
 #ifndef LAYER_PLAN_H
@@ -231,6 +231,7 @@ class LayerPlanBuffer; // forward declaration to prevent circular dependency
 class LayerPlan : public NoCopy
 {
     friend class LayerPlanBuffer;
+    friend class AddTravelTest;
 private:
     const SliceDataStorage& storage; //!< The polygon data obtained from FffPolygonProcessor
 
@@ -450,17 +451,34 @@ public:
     }
 
     /*!
-     * Add a travel path to a certain point, retract if needed and when avoiding boundary crossings:
-     * avoiding obstacles and comb along the boundary of parts.
-     * 
-     * \warning For the first travel move in a layer this will result in a bogous travel move with no combing and no retraction
-     * This travel move needs to be fixed afterwards
-     * 
-     * \param p The point to travel to
-     * \param force_comb_retract Whether to force a retraction to occur when travelling to this point. (Only enforced when distance is larger than retraction_min_travel)
+     * Travel to a certain point, with all of the procedures necessary to do so.
+     *
+     * Additional procedures here are:
+     * - If retraction is forced, always retract.
+     * - If the travel distance is shorter than the outer diameter of the nozzle
+     *   - Travel directly without combing, retraction or Z hop.
+     * - If combing is enabled, try a combing move.
+     *   - If combing succeeds, i.e. there is a path to the destination
+     *     - If the combed path is longer than retraction_combing_max_distance
+     *       - Only retract (if enabled). Don't Z hop. Then follow coming path.
+     *     - If the combed path is shorter
+     *       - Travel the combing path without retraction.
+     *   - If combing fails, i.e. the destination is in a different part
+     *     - If Z hop is enabled
+     *       - Retract (if enabled) and make a straight travel move.
+     *     - If Z hop is disabled
+     *       - Retract (if enabled) and make a multi-part travel move.
+     * - If combing is disabled
+     *   - Retract (if enabled) and Z hop (if enabled) and make straight travel.
+     *
+     * The first travel move in a layer will result in a bogus travel move with
+     * no combing and no retraction. This travel move needs to be fixed
+     * afterwards.
+     * \param p The point to travel to.
+     * \param force_comb_retract Whether to force a retraction to occur.
      */
-    GCodePath& addTravel(Point p, bool force_comb_retract = false);
-    
+    GCodePath& addTravel(const Point p, const bool force_retract = false);
+
     /*!
      * Add a travel path to a certain point and retract if needed.
      * 
@@ -505,23 +523,33 @@ public:
     /*!
      * Add polygons to the gcode with optimized order.
      * 
-     * When \p spiralize is true, each polygon will gradually increase from a z corresponding to this layer to the z corresponding to the next layer.
-     * Doing this for each polygon means there is a chance for the print head to crash into already printed parts,
-     * but doing it for the last polygon only would mean you are printing half of the layer in non-spiralize mode,
-     * while each layer starts with a different part.
-     * Two towers would result in alternating spiralize and non-spiralize layers.
+     * When \p spiralize is true, each polygon will gradually increase from a z
+     * corresponding to this layer to the z corresponding to the next layer.
+     * Doing this for each polygon means there is a chance for the print head to
+     * crash into already printed parts, but doing it for the last polygon only
+     * would mean you are printing half of the layer in non-spiralize mode,
+     * while each layer starts with a different part. Two towers would result in
+     * alternating spiralize and non-spiralize layers.
      * 
-     * \param polygons The polygons
-     * \param config The config with which to print the polygon lines
-     * \param wall_overlap_computation The wall overlap compensation calculator for each given segment (optionally nullptr)
-     * \param z_seam_config Optional configuration for z-seam
-     * \param wall_0_wipe_dist The distance to travel along each polygon after it has been laid down, in order to wipe the start and end of the wall together
-     * \param spiralize Whether to gradually increase the z height from the normal layer height to the height of the next layer over each polygon printed
-     * \param flow_ratio The ratio with which to multiply the extrusion amount
-     * \param always_retract Whether to force a retraction when moving to the start of the polygon (used for outer walls)
-     * \param reverse_order Adds polygons in reverse order
+     * \param polygons The polygons.
+     * \param config The config with which to print the polygon lines.
+     * \param wall_overlap_computation The wall overlap compensation calculator
+     * for each given segment (optionally nullptr).
+     * \param z_seam_config Optional configuration for z-seam.
+     * \param wall_0_wipe_dist The distance to travel along each polygon after
+     * it has been laid down, in order to wipe the start and end of the wall
+     * together.
+     * \param spiralize Whether to gradually increase the z height from the
+     * normal layer height to the height of the next layer over each polygon
+     * printed.
+     * \param flow_ratio The ratio with which to multiply the extrusion amount.
+     * \param always_retract Whether to force a retraction when moving to the
+     * start of the polygon (used for outer walls).
+     * \param reverse_order Adds polygons in reverse order.
+     * \param start_near_location Start optimising the path near this location.
+     * If unset, this causes it to start near the last planned location.
      */
-    void addPolygonsByOptimizer(const Polygons& polygons, const GCodePathConfig& config, WallOverlapComputation* wall_overlap_computation = nullptr, const ZSeamConfig& z_seam_config = ZSeamConfig(), coord_t wall_0_wipe_dist = 0, bool spiralize = false, const Ratio flow_ratio = 1.0_r, bool always_retract = false, bool reverse_order = false);
+    void addPolygonsByOptimizer(const Polygons& polygons, const GCodePathConfig& config, WallOverlapComputation* wall_overlap_computation = nullptr, const ZSeamConfig& z_seam_config = ZSeamConfig(), coord_t wall_0_wipe_dist = 0, bool spiralize = false, const Ratio flow_ratio = 1.0_r, bool always_retract = false, bool reverse_order = false, const std::optional<Point> start_near_location = std::optional<Point>());
 
     /*!
      * Add a single line that is part of a wall to the gcode.
