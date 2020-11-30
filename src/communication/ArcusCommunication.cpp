@@ -21,6 +21,9 @@
 #include "../utils/logoutput.h"
 #include "../utils/polygon.h"
 
+#include "../sliceDataStorage.h"
+#include "../teton/teton.h"
+
 namespace cura
 {
 
@@ -305,6 +308,8 @@ void ArcusCommunication::connect(const std::string& ip, const uint16_t port)
     private_data->socket->registerMessageType(&cura::proto::GCodePrefix::default_instance());
     private_data->socket->registerMessageType(&cura::proto::SlicingFinished::default_instance());
     private_data->socket->registerMessageType(&cura::proto::SettingExtruder::default_instance());
+    private_data->socket->registerMessageType(&cura::proto::LogMessage::default_instance());
+    private_data->socket->registerMessageType(&teton::proto::Meshes::default_instance());
 
     log("Connecting to %s:%i\n", ip.c_str(), port);
     private_data->socket->connect(ip, port);
@@ -531,6 +536,23 @@ void ArcusCommunication::sliceNext()
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(250)); //Pause before checking again for a slice message.
+}
+
+void ArcusCommunication::sendLogMessage(const std::string& msg, int level) const {
+    std::shared_ptr<proto::LogMessage> message = std::make_shared<cura::proto::LogMessage>();
+    message->set_msg(msg);
+    if (level == 1) {
+        message->set_level(proto::LogMessage::Warn);
+    } else {
+        message->set_level(proto::LogMessage::Error);
+    }
+    private_data->socket->sendMessage(message);
+}
+
+void ArcusCommunication::sendSliceDataStorage(const SliceDataStorage& storage) const {
+    auto meshes = std::make_shared<teton::proto::Meshes>();
+    teton::sliceDataStorageToTetonMeshes(storage, meshes);
+    private_data->socket->sendMessage(meshes);
 }
 
 } //namespace cura

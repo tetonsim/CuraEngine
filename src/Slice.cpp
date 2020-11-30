@@ -14,7 +14,7 @@ Slice::Slice(const size_t num_mesh_groups)
 
 void Slice::compute()
 {
-    logWarning("%s", scene.getAllSettingsString().c_str());
+    log("%s", scene.getAllSettingsString().c_str());
     for (std::vector<MeshGroup>::iterator mesh_group = scene.mesh_groups.begin(); mesh_group != scene.mesh_groups.end(); mesh_group++)
     {
         scene.current_mesh_group = mesh_group;

@@ -101,6 +101,10 @@ template<> ExtruderTrain& Settings::get<ExtruderTrain&>(const std::string& key) 
     {
         extruder_nr = get<size_t>("extruder_nr");
     }
+    if ((size_t)extruder_nr >= Application::getInstance().current_slice->scene.extruders.size()) {
+        logError("Requested extruder number %i on setting %s does not exist", extruder_nr, key.c_str());
+        std::exit(2);
+    }
     return Application::getInstance().current_slice->scene.extruders[extruder_nr];
 }
 

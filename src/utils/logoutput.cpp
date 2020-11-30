@@ -7,6 +7,9 @@
 #endif // _OPENMP
 #include "logoutput.h"
 
+#include "../Application.h"
+#include "../communication/Communication.h"
+
 namespace cura {
 
 static int verbose_level;
@@ -22,30 +25,50 @@ void enableProgressLogging()
     progressLogging = true;
 }
 
+std::string buildMsg(const char* fmt, va_list args) {
+    char buf[4096];
+    vsnprintf(buf, 4096, fmt, args);
+    return std::string(buf);
+}
+
 void logError(const char* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
+
+    std::string msg = buildMsg(fmt, args);
+
     #pragma omp critical
     {
         fprintf(stderr, "[ERROR] ");
-        vfprintf(stderr, fmt, args);
+        fprintf(stderr, "%s", msg.c_str());
         fflush(stderr);
     }
     va_end(args);
+
+    if (Application::getInstance().communication) {
+        Application::getInstance().communication->sendLogMessage(msg, 0);
+    }
 }
 
 void logWarning(const char* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
+
+    std::string msg = buildMsg(fmt, args);
+
     #pragma omp critical
     {
         fprintf(stderr, "[WARNING] ");
-        vfprintf(stderr, fmt, args);
+        fprintf(stderr, "%s", msg.c_str());
         fflush(stderr);
     }
     va_end(args);
+
+    if (Application::getInstance().communication) {
+        Application::getInstance().communication->sendLogMessage(msg, 1);
+    }
 }
 
 void logAlways(const char* fmt, ...)
