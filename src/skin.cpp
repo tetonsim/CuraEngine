@@ -13,9 +13,9 @@
 #include "utils/math.h"
 #include "utils/polygonUtils.h"
 
-#define MIN_AREA_SIZE (0.4 * 0.4) 
+#define MIN_AREA_SIZE (0.4 * 0.4)
 
-namespace cura 
+namespace cura
 {
 
 coord_t SkinInfillAreaComputation::getSkinLineWidth(const SliceMeshStorage& mesh, const LayerIndex& layer_nr)
@@ -49,20 +49,6 @@ coord_t SkinInfillAreaComputation::getWallLineWidthX(const SliceMeshStorage& mes
     }
     return wall_line_width_x;
 }
-coord_t SkinInfillAreaComputation::getInfillSkinOverlap(const SliceMeshStorage& mesh, const LayerIndex& layer_nr, const coord_t& innermost_wall_line_width)
-{
-    coord_t infill_skin_overlap = 0;
-    { // compute infill_skin_overlap
-        const ExtruderTrain& train_infill = mesh.settings.get<ExtruderTrain&>("infill_extruder_nr");
-        const Ratio infill_line_width_factor = (layer_nr == 0) ? train_infill.settings.get<Ratio>("initial_layer_line_width_factor") : Ratio(1.0);
-        const bool infill_is_dense = mesh.settings.get<coord_t>("infill_line_distance") < mesh.settings.get<coord_t>("infill_line_width") * infill_line_width_factor + 10;
-        if (!infill_is_dense && mesh.settings.get<EFillMethod>("infill_pattern") != EFillMethod::CONCENTRIC)
-        {
-            infill_skin_overlap = innermost_wall_line_width / 2;
-        }
-    }
-    return infill_skin_overlap;
-}
 
 SkinInfillAreaComputation::SkinInfillAreaComputation(const LayerIndex& layer_nr, SliceMeshStorage& mesh, bool process_infill)
 : layer_nr(layer_nr)
@@ -75,7 +61,6 @@ SkinInfillAreaComputation::SkinInfillAreaComputation(const LayerIndex& layer_nr,
 , wall_line_width_0(getWallLineWidth0(mesh, layer_nr))
 , wall_line_width_x(getWallLineWidthX(mesh, layer_nr))
 , innermost_wall_line_width((wall_line_count == 1) ? wall_line_width_0 : wall_line_width_x)
-, infill_skin_overlap(getInfillSkinOverlap(mesh, layer_nr, innermost_wall_line_width))
 , skin_inset_count(mesh.settings.get<size_t>("skin_outline_count"))
 , no_small_gaps_heuristic(mesh.settings.get<bool>("skin_no_small_gaps_heuristic"))
 , process_infill(process_infill)
@@ -117,7 +102,7 @@ Polygons SkinInfillAreaComputation::getWalls(const SliceLayerPart& part_here, in
         }
     }
     return result;
-};
+}
 
 int SkinInfillAreaComputation::getReferenceWallIdx(coord_t& preshrink) const
 {
@@ -387,7 +372,10 @@ void SkinInfillAreaComputation::generateSkinInsets(SkinPart& skin_part)
         }
 
         // optimize polygons: remove unnecessary verts
-        skin_part.insets[inset_idx].simplify();
+        const ExtruderTrain& train_wall = mesh.settings.get<ExtruderTrain&>(inset_idx == 0 ? "wall_0_extruder_nr" : "wall_x_extruder_nr");
+        const coord_t maximum_resolution = train_wall.settings.get<coord_t>("meshfix_maximum_resolution");
+        const coord_t maximum_deviation = train_wall.settings.get<coord_t>("meshfix_maximum_deviation");
+        skin_part.insets[inset_idx].simplify(maximum_resolution, maximum_deviation);
         if (skin_part.insets[inset_idx].size() < 1)
         {
             skin_part.insets.pop_back();
@@ -425,43 +413,44 @@ void SkinInfillAreaComputation::generateInfill(SliceLayerPart& part, const Polyg
     {
         return; // the last wall is not present, the part should only get inter perimeter gaps, but no infill.
     }
-    const size_t wall_line_count = mesh.settings.get<size_t>("wall_line_count");
-    const coord_t infill_line_distance = mesh.settings.get<coord_t>("infill_line_distance");
 
-    coord_t offset_from_inner_wall = -infill_skin_overlap;
-    if (wall_line_count > 0)
-    { // calculate offset_from_inner_wall
-        coord_t extra_perimeter_offset = 0; // to align concentric polygons across layers
-        const EFillMethod fill_pattern = mesh.settings.get<EFillMethod>("infill_pattern");
-        if (fill_pattern == EFillMethod::CONCENTRIC
-            && infill_line_distance > mesh.settings.get<coord_t>("infill_line_width") * 2)
-        {
-            if (mesh.settings.get<bool>("alternate_extra_perimeter")
-                && layer_nr % 2 == 0)
-            { // compensate shifts otherwise caused by alternating an extra perimeter
-                extra_perimeter_offset = -innermost_wall_line_width;
-            }
-            if (layer_nr == 0)
-            { // compensate for shift caused by walls being expanded by the initial line width multiplier
-                const coord_t normal_wall_line_width_0 = mesh.settings.get<coord_t>("wall_line_width_0");
-                const coord_t normal_wall_line_width_x = mesh.settings.get<coord_t>("wall_line_width_x");
-                const coord_t normal_walls_width = normal_wall_line_width_0 + (wall_line_count - 1) * normal_wall_line_width_x;
-                const coord_t walls_width = normal_walls_width * mesh.settings.get<Ratio>("initial_layer_line_width_factor");
-                extra_perimeter_offset += walls_width - normal_walls_width;
-                while (extra_perimeter_offset > 0)
-                {
-                    extra_perimeter_offset -= infill_line_distance;
+    auto get_offset = [this]()
+    {
+        const auto infill_line_distance = mesh.settings.get<coord_t>("infill_line_distance");
+        if (wall_line_count > 0)
+        { // calculate offset_from_inner_wall
+            coord_t extra_perimeter_offset = 0; // to align concentric polygons across layers
+            const auto fill_pattern = mesh.settings.get<EFillMethod>("infill_pattern");
+            if (fill_pattern == EFillMethod::CONCENTRIC
+                && infill_line_distance > mesh.settings.get<coord_t>("infill_line_width") * 2)
+            {
+                if (mesh.settings.get<bool>("alternate_extra_perimeter")
+                    && layer_nr % 2 == 0)
+                { // compensate shifts otherwise caused by alternating an extra perimeter
+                    extra_perimeter_offset = -innermost_wall_line_width;
+                }
+                if (layer_nr == 0)
+                { // compensate for shift caused by walls being expanded by the initial line width multiplier
+                    const auto normal_wall_line_width_0 = mesh.settings.get<coord_t>("wall_line_width_0");
+                    const auto normal_wall_line_width_x = mesh.settings.get<coord_t>("wall_line_width_x");
+                    const coord_t normal_walls_width = normal_wall_line_width_0 + (wall_line_count - 1) * normal_wall_line_width_x;
+                    const coord_t walls_width = normal_walls_width * mesh.settings.get<Ratio>("initial_layer_line_width_factor");
+                    extra_perimeter_offset += walls_width - normal_walls_width;
+                    while (extra_perimeter_offset > 0)
+                    {
+                        extra_perimeter_offset -= infill_line_distance;
+                    }
                 }
             }
+            return extra_perimeter_offset - innermost_wall_line_width / 2;
         }
-        offset_from_inner_wall += extra_perimeter_offset - innermost_wall_line_width / 2;
-    }
-    Polygons infill = part.insets.back().offset(offset_from_inner_wall);
+        return coord_t(0);
+    };
 
-    infill = infill.difference(skin.offset(infill_skin_overlap));
-    infill.removeSmallAreas(MIN_AREA_SIZE);
+    const coord_t offset_from_inner_wall = get_offset();
 
-    part.infill_area = infill.offset(infill_skin_overlap);
+    part.infill_area = part.insets.back().offset(offset_from_inner_wall).difference(skin);
+    part.infill_area.removeSmallAreas(MIN_AREA_SIZE);
 }
 
 /*
@@ -491,7 +480,7 @@ void SkinInfillAreaComputation::generateRoofing(SliceLayerPart& part)
                 && mesh.settings.get<EFillMethod>("roofing_pattern") != EFillMethod::CONCENTRIC
                 && mesh.settings.get<EFillMethod>("top_bottom_pattern") == EFillMethod::CONCENTRIC)
             {
-                // Generate skin insets, regenerate the no_air_above, and recalculate the inner and roofing infills, 
+                // Generate skin insets, regenerate the no_air_above, and recalculate the inner and roofing infills,
                 // taking into account the extra skin wall count (only for the roofing layers).
                 generateSkinInsets(skin_part);
                 regenerateRoofingFillAndInnerInfill(part, skin_part);
@@ -499,8 +488,8 @@ void SkinInfillAreaComputation::generateRoofing(SliceLayerPart& part)
             // On the contrary, unwanted insets are generated for roofing layers because of the non-concentric top/bottom pattern.
             // In such cases we want to clear the skin insets first and then regenerate the proper roofing fill and inner infill
             // in the concentric roofing_pattern.
-            else if (!skin_part.roofing_fill.empty()
-                    && layer_nr > 0 
+            else if (!skin_part.roofing_fill.empty() && skin_part.inner_infill.empty()
+                    && layer_nr > 0
                     && mesh.settings.get<EFillMethod>("roofing_pattern") == EFillMethod::CONCENTRIC
                     && mesh.settings.get<EFillMethod>("top_bottom_pattern") != EFillMethod::CONCENTRIC)
             {
@@ -577,7 +566,7 @@ void SkinInfillAreaComputation::generateInfillSupport(SliceMeshStorage& mesh)
     {
         SliceLayer& layer = mesh.layers[layer_idx];
         SliceLayer& layer_above = mesh.layers[layer_idx + 1];
-        
+
         Polygons inside_above;
         Polygons infill_above;
         for (SliceLayerPart& part_above : layer_above.parts)
