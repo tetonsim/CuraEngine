@@ -49,7 +49,7 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE_INIT}")
 endif()
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 
 if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
@@ -216,6 +216,8 @@ set(engine_SRCS # Except main.cpp.
     src/utils/ProximityPointLink.cpp
     src/utils/SVG.cpp
     src/utils/socket.cpp
+
+    src/teton/teton.cpp
 )
 
 # List of tests. For each test there must be a file tests/${NAME}.cpp.
@@ -264,7 +266,7 @@ set(engine_TEST_HELPERS
 
 # Generating ProtoBuf protocol
 if (ENABLE_ARCUS)
-    protobuf_generate_cpp(engine_PB_SRCS engine_PB_HEADERS Cura.proto)
+    protobuf_generate_cpp(engine_PB_SRCS engine_PB_HEADERS Cura.proto Teton.proto)
 endif ()
 
 # Compiling CuraEngine itself.

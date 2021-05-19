@@ -12,6 +12,7 @@
 
 #include "Communication.h" //The class we're implementing.
 #include "Cura.pb.h" //To create Protobuf messages for Cura's front-end.
+#include "Teton.pb.h"
 
 //Forward declarations to speed up compilation.
 namespace Arcus
@@ -192,6 +193,10 @@ public:
      * \brief Slice the next scene that the front-end wants us to slice.
      */
     void sliceNext() override;
+
+    void sendLogMessage(const std::string& msg, int level) const override;
+
+    void sendSliceDataStorage(const SliceDataStorage&) const override;
 
 private:
     /*
