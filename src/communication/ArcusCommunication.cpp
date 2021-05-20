@@ -21,6 +21,7 @@
 #include "../utils/logoutput.h"
 #include "../utils/polygon.h"
 
+#include "../slicer.h"
 #include "../sliceDataStorage.h"
 #include "../teton/teton.h"
 
@@ -310,6 +311,7 @@ void ArcusCommunication::connect(const std::string& ip, const uint16_t port)
     private_data->socket->registerMessageType(&cura::proto::SettingExtruder::default_instance());
     private_data->socket->registerMessageType(&cura::proto::LogMessage::default_instance());
     private_data->socket->registerMessageType(&teton::proto::Meshes::default_instance());
+    private_data->socket->registerMessageType(&teton::proto::MeshOutline::default_instance());
 
     log("Connecting to %s:%i\n", ip.c_str(), port);
     private_data->socket->connect(ip, port);
@@ -547,6 +549,28 @@ void ArcusCommunication::sendLogMessage(const std::string& msg, int level) const
         message->set_level(proto::LogMessage::Error);
     }
     private_data->socket->sendMessage(message);
+}
+
+void ArcusCommunication::sendOutlines(Slicer& slicer, unsigned int mesh_index) const {
+    auto outline = std::make_shared<teton::proto::MeshOutline>();
+
+    outline->set_id(mesh_index);
+
+    teton::slicerToTetonMeshOutline(slicer, outline);
+    private_data->socket->sendMessage(outline);
+
+    const Arcus::MessagePtr message = private_data->socket->takeNextMessage();
+
+    //Handle the main Slice message.
+    const auto* outline_overrides = dynamic_cast<teton::proto::MeshOutline*>(message.get());
+
+    if (!outline_overrides) {
+        logWarning("Unable to interpret message when expecting MeshOutline overrides");
+    } else if (outline_overrides->layers().size() > 0) {
+        log("Override outline polygons for %d layers", outline_overrides->layers().size());
+
+        teton::overrideSlicerOutlines(slicer, *outline_overrides);
+    }
 }
 
 void ArcusCommunication::sendSliceDataStorage(const SliceDataStorage& storage) const {

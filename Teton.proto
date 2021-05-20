@@ -65,3 +65,14 @@ message Polygon {
     Type type = 4;
 }
 
+message LayerOutline {
+    int32 z = 1;
+    repeated Polygon polygons = 2;
+}
+
+message MeshOutline {
+    int32 id = 1;
+    string name = 2;
+    repeated LayerOutline layers = 3;
+}
+

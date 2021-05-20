@@ -16,6 +16,7 @@ class Polygons;
 class ConstPolygonRef;
 class ExtruderTrain;
 class SliceDataStorage;
+class Slicer;
 
 /*
  * An abstract class to provide a common interface for all methods of
@@ -175,6 +176,8 @@ public:
     virtual void sliceNext() = 0;
 
     virtual void sendLogMessage(const std::string& msg, int level) const { }
+
+    virtual void sendOutlines(Slicer&, unsigned int mesh_index) const { }
 
     virtual void sendSliceDataStorage(const SliceDataStorage&) const { }
 };

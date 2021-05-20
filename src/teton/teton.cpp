@@ -4,6 +4,7 @@
 #include <google/protobuf/text_format.h>
 #include <google/protobuf/util/json_util.h>
 
+#include "../mesh.h"
 #include "../utils/logoutput.h"
 #include "../settings/EnumSettings.h"
 
@@ -232,6 +233,63 @@ void sliceDataStorageToTetonMeshes(const cura::SliceDataStorage& storage, std::s
         mesh->set_id(mesh_id++);
 
         teton::sliceMeshStorageToTetonMesh(mesh, meshStorage);
+    }
+}
+
+void slicerToTetonMeshOutline(const cura::Slicer& slicer, std::shared_ptr<teton::proto::MeshOutline> outline) {
+    if (slicer.mesh) {
+        outline->set_name(slicer.mesh->mesh_name);
+    }
+
+    size_t layer_id = 1;
+
+    for (const cura::SlicerLayer& slicer_layer : slicer.layers) {
+        proto::LayerOutline* layer = outline->add_layers();
+
+        //layer->set_id(layer_id++);
+        layer->set_z(slicer_layer.z);
+
+        for (size_t i = 0; i < slicer_layer.polygons.size(); i++) {
+            proto::Polygon* p = layer->add_polygons();
+
+            curaPolygonToPolygon(p, slicer_layer.polygons[i]);
+
+            p->set_id(i + 1);
+            p->set_type(proto::Polygon::Exterior);
+        }
+
+        // Do we need to look at slicer_layer.openPolyLines?
+    }
+}
+
+void overrideSlicerOutlines(cura::Slicer& slicer, const teton::proto::MeshOutline& outline) {
+    for (const auto& layer : outline.layers()) {
+        cura::SlicerLayer* pslicer_layer = nullptr;
+
+        // TODO speed up search by assuming both layer lists are ordered by z
+        for (auto& slicer_layer : slicer.layers) {
+            if (slicer_layer.z == layer.z()) {
+                pslicer_layer = &slicer_layer;
+                break;
+            }
+        }
+
+        if (!pslicer_layer) {
+            cura::logError("Could not find matching slicer layer in outline override for z = %i", layer.z());
+        } else {
+            pslicer_layer->polygons.clear();
+
+            for (const auto& polygon : layer.polygons()) {
+                cura::Polygon p;
+
+                const auto& points = polygon.points();
+                for (size_t i = 0; i < points.size(); i += 2) {
+                    p.add(cura::Point { points[i], points[i + 1] });
+                }
+
+                pslicer_layer->polygons.add(std::move(p));
+            }
+        }
     }
 }
 

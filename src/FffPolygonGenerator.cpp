@@ -46,6 +46,7 @@
 #include "utils/logoutput.h"
 #include "utils/math.h"
 
+#include "communication/Communication.h" //To flush g-code and layer view when we're done.
 
 namespace cura
 {
@@ -163,6 +164,8 @@ bool FffPolygonGenerator::sliceModel(MeshGroup* meshgroup, TimeKeeper& timeKeepe
             sendPolygons("openoutline", layer_nr, layer.openPolygonList);
         }
         */
+
+        Application::getInstance().communication->sendOutlines(*slicer, mesh_idx + 1);
 
         Progress::messageProgress(Progress::Stage::SLICING, mesh_idx + 1, meshgroup->meshes.size());
     }

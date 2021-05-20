@@ -196,6 +196,8 @@ public:
 
     void sendLogMessage(const std::string& msg, int level) const override;
 
+    void sendOutlines(Slicer&, unsigned int mesh_index) const override;
+
     void sendSliceDataStorage(const SliceDataStorage&) const override;
 
 private:
