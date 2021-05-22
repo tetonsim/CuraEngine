@@ -165,7 +165,9 @@ bool FffPolygonGenerator::sliceModel(MeshGroup* meshgroup, TimeKeeper& timeKeepe
         }
         */
 
-        Application::getInstance().communication->sendOutlines(*slicer, mesh_idx + 1);
+        if (mesh.settings.get<bool>("use_outline_modifier")) {
+            Application::getInstance().communication->sendOutlines(*slicer, mesh_idx + 1);
+        }
 
         Progress::messageProgress(Progress::Stage::SLICING, mesh_idx + 1, meshgroup->meshes.size());
     }
